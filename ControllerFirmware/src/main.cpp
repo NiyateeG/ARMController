@@ -9,7 +9,7 @@
  *
  * WHAT THIS CODE DOES:
  * 1. Connects to TCA9548A 8-Channel I2C MUX at address 0x70.
- * 2. Iterates through all 8 channels (CH0 to CH7) every 200 ms.
+ * 2. Iterates through seven named channels every 500 ms.
  * 3. Switches MUX channel, reads the AS5600 encoder (if present), and prints
  *    the raw 12-bit angle (0–4095), calculated degrees (0–360°), and magnet
  * status.
@@ -34,8 +34,11 @@
 #define I2C_SCL_PIN 22
 #define TCA9548A_ADDR 0x70
 
-#define NUM_CHANNELS 8       // Total channels on TCA9548A (0 to 7)
+#define NUM_CHANNELS 7       // Application channels mapped to MUX channels 0 to 6
 #define READ_INTERVAL_MS 500 // Read all channels every 200 ms (5 Hz)
+
+const char *const CHANNEL_NAMES[NUM_CHANNELS] = {
+  "base", "Joint 5", "Joint 3", "joint 4", "joint 2", "Trigger", "joint 1"};
 
 // ----------------------------------------------------------------------------
 // GLOBAL OBJECTS & STATE
@@ -141,7 +144,7 @@ void loop() {
 
     int connected_count = 0;
 
-    // 1. Read all 8 MUX channels
+    // 1. Read all application channels
     for (uint8_t ch = 0; ch < NUM_CHANNELS; ch++) {
       selectMuxChannel(ch);
       delay(2); // Short settling delay for I2C line switching
@@ -169,8 +172,10 @@ void loop() {
 
     for (uint8_t ch = 0; ch < NUM_CHANNELS; ch++) {
       Serial.print("  CH");
-      Serial.print(ch);
-      Serial.print(" (SD");
+      Serial.print(ch + 1);
+      Serial.print(" - ");
+      Serial.print(CHANNEL_NAMES[ch]);
+      Serial.print(" (MUX SD");
       Serial.print(ch);
       Serial.print("/SC");
       Serial.print(ch);
