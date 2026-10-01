@@ -37,17 +37,6 @@
 #define NUM_CHANNELS 8       // Total channels on TCA9548A (0 to 7)
 #define READ_INTERVAL_MS 500 // Read all channels every 200 ms (5 Hz)
 
-const char *channel_names[NUM_CHANNELS] = {
-  "UNASSIGNED", // CH0
-  "Base",       // CH1
-  "Joint 5",    // CH2
-  "Joint 3",    // CH3
-  "Joint 4",    // CH4
-  "Joint 2",    // CH5
-  "Trigger",    // CH6
-  "Joint 1"     // CH7
-};
-
 // ----------------------------------------------------------------------------
 // GLOBAL OBJECTS & STATE
 // ----------------------------------------------------------------------------
@@ -166,26 +155,49 @@ void loop() {
     // Disable channels after reading
     selectMuxChannel(255);
 
-    // 2. Print an aligned summary table to Serial Monitor
-    Serial.println();
-    Serial.printf("ENCODER STATUS @ %lu ms  (%d/%d connected)\n",
-                  millis(), connected_count, NUM_CHANNELS);
-    Serial.println("---------------------------------------------------------------");
-    Serial.println(" Joint      | Values                         | Channel | SD/SC");
-    Serial.println("---------------------------------------------------------------");
+    // 2. Print formatted summary to Serial Monitor
+    Serial.println("-----------------------------------------------------------"
+                   "---------------------");
+    Serial.print("TIMESTAMP: ");
+    Serial.print(millis());
+    Serial.print(" ms | Connected Encoders: ");
+    Serial.print(connected_count);
+    Serial.print("/");
+    Serial.println(NUM_CHANNELS);
+    Serial.println("-----------------------------------------------------------"
+                   "---------------------");
 
     for (uint8_t ch = 0; ch < NUM_CHANNELS; ch++) {
+      Serial.print("  CH");
+      Serial.print(ch);
+      Serial.print(" (SD");
+      Serial.print(ch);
+      Serial.print("/SC");
+      Serial.print(ch);
+      Serial.print("): ");
+
       if (channel_data[ch].connected) {
-        Serial.printf(" %-10s | Raw: %4u  Deg: %6.1f  Mag: %-3s | CH%-5u | SD%u/SC%u\n",
-                      channel_names[ch], channel_data[ch].raw_angle,
-                      channel_data[ch].degrees,
-                      channel_data[ch].magnet_ok ? "OK" : "NO",
-                      ch, ch, ch);
+        Serial.print("Raw = ");
+        if (channel_data[ch].raw_angle < 1000)
+          Serial.print(" ");
+        if (channel_data[ch].raw_angle < 100)
+          Serial.print(" ");
+        if (channel_data[ch].raw_angle < 10)
+          Serial.print(" ");
+        Serial.print(channel_data[ch].raw_angle);
+
+        Serial.print(" | Angle = ");
+        if (channel_data[ch].degrees < 100.0)
+          Serial.print(" ");
+        if (channel_data[ch].degrees < 10.0)
+          Serial.print(" ");
+        Serial.print(channel_data[ch].degrees, 1);
+        Serial.print("° | Magnet = ");
+        Serial.println(channel_data[ch].magnet_ok ? "OK" : "NO MAGNET!");
       } else {
-        Serial.printf(" %-10s | NOT CONNECTED                  | CH%-5u | SD%u/SC%u\n",
-                      channel_names[ch], ch, ch, ch);
+        Serial.println("--- NOT CONNECTED ---");
       }
     }
-    Serial.println("---------------------------------------------------------------");
+    Serial.println();
   }
 }
