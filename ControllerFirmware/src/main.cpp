@@ -61,6 +61,10 @@ struct EncoderData {
   uint16_t raw_angle;
   float degrees;
   bool magnet_ok;
+  bool has_prev;
+  uint16_t prev_raw_angle;
+  int16_t raw_change;
+  bool valid_change;
 };
 
 EncoderData channel_data[NUM_CHANNELS];
@@ -101,15 +105,36 @@ void selectMuxChannel(uint8_t channel) {
 void readActiveChannel(uint8_t ch) {
   // Attempt AS5600 initialization on active channel
   if (as5600.begin(AS5600_DEFAULT_ADDR, &Wire)) {
+    uint16_t current_raw = as5600.getRawAngle();
     channel_data[ch].connected = true;
-    channel_data[ch].raw_angle = as5600.getRawAngle();
-    channel_data[ch].degrees = (channel_data[ch].raw_angle * 360.0) / 4096.0;
+    channel_data[ch].raw_angle = current_raw;
+    channel_data[ch].degrees = (current_raw * 360.0) / 4096.0;
     channel_data[ch].magnet_ok = as5600.isMagnetDetected();
+
+    if (channel_data[ch].has_prev) {
+      int16_t diff = (int16_t)current_raw - (int16_t)channel_data[ch].prev_raw_angle;
+      // Handle 12-bit circular wrap-around (0 - 4095)
+      if (diff > 2048) {
+        diff -= 4096;
+      } else if (diff < -2048) {
+        diff += 4096;
+      }
+      channel_data[ch].raw_change = diff;
+      channel_data[ch].valid_change = true;
+    } else {
+      channel_data[ch].raw_change = 0;
+      channel_data[ch].valid_change = false;
+      channel_data[ch].has_prev = true;
+    }
+    channel_data[ch].prev_raw_angle = current_raw;
   } else {
     channel_data[ch].connected = false;
     channel_data[ch].raw_angle = 0;
     channel_data[ch].degrees = 0.0;
     channel_data[ch].magnet_ok = false;
+    channel_data[ch].has_prev = false;
+    channel_data[ch].valid_change = false;
+    channel_data[ch].raw_change = 0;
   }
 }
 
@@ -170,22 +195,33 @@ void loop() {
     Serial.println();
     Serial.printf("ENCODER STATUS @ %lu ms  (%d/%d connected)\n",
                   millis(), connected_count, NUM_CHANNELS);
-    Serial.println("---------------------------------------------------------------");
-    Serial.println(" Joint      | Values                         | Channel | SD/SC");
-    Serial.println("---------------------------------------------------------------");
+    Serial.println("--------------------------------------------------------------------------------");
+    Serial.println(" Joint      | Values                          | Change      | Channel | SD/SC  ");
+    Serial.println("--------------------------------------------------------------------------------");
 
     for (uint8_t ch = 0; ch < NUM_CHANNELS; ch++) {
+      char change_buf[16];
+      if (channel_data[ch].connected && channel_data[ch].valid_change) {
+        if (channel_data[ch].raw_change != 0) {
+          snprintf(change_buf, sizeof(change_buf), "YES (%+d)", channel_data[ch].raw_change);
+        } else {
+          snprintf(change_buf, sizeof(change_buf), "NO");
+        }
+      } else {
+        snprintf(change_buf, sizeof(change_buf), "---");
+      }
+
       if (channel_data[ch].connected) {
-        Serial.printf(" %-10s | Raw: %4u  Deg: %6.1f  Mag: %-3s | CH%-5u | SD%u/SC%u\n",
+        Serial.printf(" %-10s | Raw: %4u  Deg: %6.1f  Mag: %-3s | %-11s | CH%-5u | SD%u/SC%u\n",
                       channel_names[ch], channel_data[ch].raw_angle,
                       channel_data[ch].degrees,
                       channel_data[ch].magnet_ok ? "OK" : "NO",
-                      ch, ch, ch);
+                      change_buf, ch, ch, ch);
       } else {
-        Serial.printf(" %-10s | NOT CONNECTED                  | CH%-5u | SD%u/SC%u\n",
-                      channel_names[ch], ch, ch, ch);
+        Serial.printf(" %-10s | NOT CONNECTED                   | %-11s | CH%-5u | SD%u/SC%u\n",
+                      channel_names[ch], change_buf, ch, ch, ch);
       }
     }
-    Serial.println("---------------------------------------------------------------");
+    Serial.println("--------------------------------------------------------------------------------");
   }
 }
